@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.database import engine, Base
 from app.api import auth, products, categories, brands, orders, wishlist, admin
+
 import os
 
 # Create tables

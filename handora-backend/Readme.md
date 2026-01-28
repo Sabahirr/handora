@@ -410,8 +410,3 @@ made-az-backend/
 
 
 
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=Sebahir125385
-POSTGRES_SERVER=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=handora

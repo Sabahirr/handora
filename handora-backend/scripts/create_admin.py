@@ -14,35 +14,58 @@ def create_admin():
     db = SessionLocal()
     
     try:
-        # Check if admin already exists
-        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        email = input("Admin email: ")
+        existing_admin = db.query(User).filter(User.email == email).first()
         if existing_admin:
             print(f"Admin artıq mövcuddur: {existing_admin.email}")
-            return
+        else:
+            password = input("Şifrə: ")
+            full_name = input("Ad Soyad: ")
+            phone = input("Telefon: ")
+            
+            admin = User(
+                email=email,
+                password_hash=hash_password(password),
+                full_name=full_name,
+                phone=phone,
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+            print(f"\n✅ Admin uğurla yaradıldı! Email: {admin.email}")
+
+        # # Check if admin already exists
+        # existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        # if existing_admin:
+        #     print(f"Admin artıq mövcuddur: {existing_admin.email}")
+        #     return
         
-        # Get admin details
-        email = input("Admin email: ")
-        password = input("Şifrə: ")
-        full_name = input("Ad Soyad: ")
-        phone = input("Telefon: ")
+        # # Get admin details
+        # email = input("Admin email: ")
+        # password = input("Şifrə: ")
+        # full_name = input("Ad Soyad: ")
+        # phone = input("Telefon: ")
         
-        # Create admin user
-        admin = User(
-            email=email,
-            password_hash=hash_password(password),
-            full_name=full_name,
-            phone=phone,
-            role=UserRole.ADMIN,
-            is_active=True
-        )
+        # # Create admin user
+        # admin = User(
+        #     email=email,
+        #     password_hash=hash_password(password),
+        #     full_name=full_name,
+        #     phone=phone,
+        #     role=UserRole.ADMIN,
+        #     is_active=True
+        # )
         
-        db.add(admin)
-        db.commit()
-        db.refresh(admin)
+        # db.add(admin)
+        # db.commit()
+        # db.refresh(admin)
         
-        print(f"\n✅ Admin uğurla yaradıldı!")
-        print(f"Email: {admin.email}")
-        print(f"ID: {admin.id}")
+        # print(f"\n✅ Admin uğurla yaradıldı!")
+        # print(f"Email: {admin.email}")
+        # print(f"ID: {admin.id}")
         
     except Exception as e:
         print(f"❌ Xəta: {e}")
