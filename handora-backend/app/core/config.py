@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     
     # PostgreSQL
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "Sebahir125385"
+    POSTGRES_PASSWORD: str = "Sab123"
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: str = "5432"
     POSTGRES_DB: str = "handora"
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # Security
-    SECRET_KEY: str = "your-secret-key-here-change-in-production"
+    SECRET_KEY: str = "qara-meni-basinca-qoy-qarani-men basim"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
