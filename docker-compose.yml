@@ -15,7 +15,9 @@ services:
       - "5432:5432"
 
   backend:
-    build: .
+    build:
+      context: ./handora-backend
+      dockerfile: Dockerfile
     container_name: handora_backend
     restart: always
     depends_on:
