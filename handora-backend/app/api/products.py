@@ -4,6 +4,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.product import Product, Category, Brand
 from app.schemas.product import ProductResponse, ProductDetail, CategoryResponse, BrandResponse
+from sqlalchemy import or_
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -38,6 +39,18 @@ def get_products(
     
     return query.offset(skip).limit(limit).all()
 
+
+@router.get("/search", response_model=List[ProductResponse])
+def search_products(search: str, db: Session = Depends(get_db)):
+    search_filter = f"%{search}%"
+    return db.query(Product).filter(
+        (Product.name_az.ilike(search_filter)) |
+        (Product.name_en.ilike(search_filter)) |
+        (Product.name_ru.ilike(search_filter)) |
+        (Product.description_az.ilike(search_filter))
+    ).limit(20).all()
+
+
 @router.get("/{product_id}", response_model=ProductDetail)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -45,12 +58,3 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Məhsul tapılmadı")
     return product
 
-@router.get("/search", response_model=List[ProductResponse])
-def search_products(q: str, db: Session = Depends(get_db)):
-    search_filter = f"%{q}%"
-    return db.query(Product).filter(
-        (Product.name_az.ilike(search_filter)) |
-        (Product.name_en.ilike(search_filter)) |
-        (Product.name_ru.ilike(search_filter)) |
-        (Product.description_az.ilike(search_filter))
-    ).limit(20).all()
