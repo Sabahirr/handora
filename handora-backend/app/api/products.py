@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app.models.product import Product, Category, Brand
-from app.schemas.product import ProductResponse, ProductDetail, CategoryResponse, BrandResponse
-from sqlalchemy import or_
+from app.models.product import Product
+from app.schemas.product import ProductResponse, ProductDetail, ProductFilter
+# from sqlalchemy import or_
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -39,6 +39,36 @@ def get_products(
     
     return query.offset(skip).limit(limit).all()
 
+
+@router.get("/filter", response_model=List[ProductFilter])
+def get_products(
+    filters: ProductFilter = Depends(),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Product)
+
+    if filters.category_id is not None:
+        query = query.filter(Product.category_id == filters.category_id)
+
+    if filters.brand_id is not None:
+        query = query.filter(Product.brand_id == filters.brand_id)
+
+    if filters.is_new is not None:
+        query = query.filter(Product.is_new == filters.is_new)
+
+    if filters.is_sale is not None:
+        query = query.filter(Product.is_sale == filters.is_sale)
+
+    if filters.min_price is not None:
+        query = query.filter(Product.price >= filters.min_price)
+
+    if filters.max_price is not None:
+        query = query.filter(Product.price <= filters.max_price)
+
+    if filters.search:
+        query = query.filter(Product.name.ilike(f"%{filters.search}%"))
+
+    return query.all()
 
 @router.get("/search", response_model=List[ProductResponse])
 def search_products(search: str, db: Session = Depends(get_db)):
