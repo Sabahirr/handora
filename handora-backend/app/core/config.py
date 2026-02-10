@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
 
+SUGGESTION_PRODUCT_IDS = [1,2,3,4]
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Handora E-commerce API"
     VERSION: str = "1.0.0"
@@ -24,5 +26,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    
 
 settings = Settings()
