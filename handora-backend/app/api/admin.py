@@ -9,8 +9,11 @@ router = APIRouter(
 def ping():
     return {"message": "Admin router is working"}
 
+"""
+ADMIN API - Yalnız admin istifadəçilər üçün
+Create, Update, Delete əməliyyatları
+"""
 
-# ==================== app/api/admin.py ====================
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -18,8 +21,10 @@ from app.database import get_db
 from app.models.product import Product, Category, Brand
 from app.models.order import Order
 from app.schemas.product import (
-    ProductResponse, ProductDetail, CategoryResponse, BrandResponse,
-    CategoryCreate, CategoryUpdate, BrandCreate, BrandUpdate
+    ProductResponse, ProductDetail, 
+    ParentCategoryCreate, ParentCategoryUpdate, ParentCategoryResponse,
+    SubCategoryCreate, SubCategoryUpdate, SubCategoryResponse,
+    BrandCreate, BrandUpdate, BrandResponse
 )
 from app.core.security import get_current_admin
 from app.core.utils import save_product_image, delete_file
@@ -63,7 +68,7 @@ async def admin_create_product(
     db: Session = Depends(get_db)
 ):
     """
-    Admin - Yeni məhsul əlavə et
+    ADMIN - Yeni məhsul əlavə et
     
     Tələblər:
     - Minimum 1 şəkil
@@ -142,6 +147,7 @@ async def admin_create_product(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Məhsul yaradılmadı: {str(e)}")
 
+
 @router.put("/products/{product_id}", response_model=ProductResponse)
 async def admin_update_product(
     product_id: int,
@@ -177,7 +183,7 @@ async def admin_update_product(
     db: Session = Depends(get_db)
 ):
     """
-    Admin - Məhsulu redaktə et
+    ADMIN - Məhsulu redaktə et
     
     Qeyd: Yalnız göndərdiyiniz field-lər yenilənəcək
     """
@@ -270,6 +276,7 @@ async def admin_update_product(
     db.refresh(product)
     return product
 
+
 @router.delete("/products/{product_id}", status_code=status.HTTP_200_OK)
 def admin_delete_product(
     product_id: int,
@@ -277,7 +284,7 @@ def admin_delete_product(
     db: Session = Depends(get_db)
 ):
     """
-    Admin - Məhsulu sil
+    ADMIN - Məhsulu sil
     
     Şəkillər də silinəcək
     """
@@ -301,6 +308,7 @@ def admin_delete_product(
         "deleted_images": len(product.image_urls) if product.image_urls else 0
     }
 
+
 @router.get("/products", response_model=List[ProductResponse])
 def admin_get_all_products(
     skip: int = 0,
@@ -308,139 +316,331 @@ def admin_get_all_products(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Bütün məhsulları gör"""
+    """ADMIN - Bütün məhsulları gör"""
     return db.query(Product).offset(skip).limit(limit).all()
 
+
 # ============================================
-# CATEGORY MANAGEMENT
+# PARENT CATEGORY MANAGEMENT (ADMIN)
 # ============================================
 
-@router.post("/categories", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
-def admin_create_category(
-    category_data: CategoryCreate,
+@router.post(
+    "/categories",
+    response_model=ParentCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[ADMIN] Yeni əsas kateqoriya yarat"
+)
+def admin_create_parent_category(
+    category: ParentCategoryCreate,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Yeni kateqoriya əlavə et"""
-    
-    # Check if slug exists
-    existing = db.query(Category).filter(Category.slug == category_data.slug).first()
+    """
+    ADMIN - Yeni əsas kateqoriya yaradır (parent_id = NULL).
+    """
+    # Check if slug already exists
+    existing = db.query(Category).filter(Category.slug == category.slug).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Bu slug artıq mövcuddur")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Slug '{category.slug}' artıq mövcuddur"
+        )
     
-    # If parent_id provided, check if it exists
-    if category_data.parent_id:
-        parent = db.query(Category).filter(Category.id == category_data.parent_id).first()
-        if not parent:
-            raise HTTPException(status_code=404, detail="Ana kateqoriya tapılmadı")
-    
-    new_category = Category(
-        name_az=category_data.name_az,
-        name_en=category_data.name_en,
-        name_ru=category_data.name_ru,
-        slug=category_data.slug,
-        parent_id=category_data.parent_id
+    db_category = Category(
+        name_az=category.name_az,
+        name_en=category.name_en,
+        name_ru=category.name_ru,
+        slug=category.slug,
+        parent_id=None  # Əsas kateqoriya
     )
     
-    db.add(new_category)
+    db.add(db_category)
     db.commit()
-    db.refresh(new_category)
+    db.refresh(db_category)
     
-    return new_category
+    return db_category
 
-@router.put("/categories/{category_id}", response_model=CategoryResponse)
-def admin_update_category(
-    category_id: int,
-    category_data: CategoryUpdate,
+
+@router.get(
+    "/categories",
+    response_model=List[ParentCategoryResponse],
+    summary="[ADMIN] Bütün əsas kateqoriyaları gətir"
+)
+def admin_get_parent_categories(
+    skip: int = 0,
+    limit: int = 100,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Kateqoriyanı redaktə et (partial update)"""
+    """ADMIN - Bütün əsas kateqoriyaları qaytarır"""
+    categories = db.query(Category)\
+        .filter(Category.parent_id == None)\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
     
-    category = db.query(Category).filter(Category.id == category_id).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Kateqoriya tapılmadı")
+    return categories
+
+
+@router.put(
+    "/categories/{category_id}",
+    response_model=ParentCategoryResponse,
+    summary="[ADMIN] Əsas kateqoriyanı yenilə"
+)
+def admin_update_parent_category(
+    category_id: int,
+    category_update: ParentCategoryUpdate,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN - Mövcud əsas kateqoriyanı yeniləyir.
+    """
+    db_category = db.query(Category)\
+        .filter(Category.id == category_id, Category.parent_id == None)\
+        .first()
+    
+    if not db_category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID {category_id} ilə əsas kateqoriya tapılmadı"
+        )
     
     # Update only provided fields
-    if category_data.name_az is not None:
-        category.name_az = category_data.name_az
-    if category_data.name_en is not None:
-        category.name_en = category_data.name_en
-    if category_data.name_ru is not None:
-        category.name_ru = category_data.name_ru
+    update_data = category_update.model_dump(exclude_unset=True)
     
-    # Check slug
-    if category_data.slug is not None and category_data.slug != category.slug:
-        existing = db.query(Category).filter(
-            Category.slug == category_data.slug,
-            Category.id != category_id
-        ).first()
+    # Check slug uniqueness if being updated
+    if "slug" in update_data:
+        existing = db.query(Category)\
+            .filter(Category.slug == update_data["slug"], Category.id != category_id)\
+            .first()
         if existing:
-            raise HTTPException(status_code=400, detail="Bu slug artıq istifadə olunur")
-        category.slug = category_data.slug
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Slug '{update_data['slug']}' artıq mövcuddur"
+            )
     
-    # Update parent_id
-    if category_data.parent_id is not None:
-        # Prevent self-referencing
-        if category_data.parent_id == category_id:
-            raise HTTPException(status_code=400, detail="Kateqoriya özünə ana kateqoriya ola bilməz")
-        
-        if category_data.parent_id > 0:
-            parent = db.query(Category).filter(Category.id == category_data.parent_id).first()
-            if not parent:
-                raise HTTPException(status_code=404, detail="Ana kateqoriya tapılmadı")
-        
-        category.parent_id = category_data.parent_id if category_data.parent_id > 0 else None
+    for field, value in update_data.items():
+        setattr(db_category, field, value)
     
     db.commit()
-    db.refresh(category)
+    db.refresh(db_category)
     
-    return category
+    return db_category
 
-@router.delete("/categories/{category_id}")
-def admin_delete_category(
+
+@router.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="[ADMIN] Əsas kateqoriyanı sil"
+)
+def admin_delete_parent_category(
     category_id: int,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Kateqoriyanı sil"""
+    """
+    ADMIN - Əsas kateqoriyanı silir.
+    Əgər alt kateqoriyalar varsa, xəta qaytarır.
+    """
+    db_category = db.query(Category)\
+        .filter(Category.id == category_id, Category.parent_id == None)\
+        .first()
     
-    category = db.query(Category).filter(Category.id == category_id).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Kateqoriya tapılmadı")
-    
-    # Check if category has products
-    products_count = db.query(Product).filter(Product.category_id == category_id).count()
-    if products_count > 0:
+    if not db_category:
         raise HTTPException(
-            status_code=400,
-            detail=f"Bu kateqoriyada {products_count} məhsul var. Əvvəlcə məhsulları silin və ya başqa kateqoriyaya köçürün"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID {category_id} ilə əsas kateqoriya tapılmadı"
         )
     
-    # Check if category has subcategories
-    subcategories = db.query(Category).filter(Category.parent_id == category_id).count()
-    if subcategories > 0:
+    # Check if has subcategories
+    subcategories_count = db.query(Category)\
+        .filter(Category.parent_id == category_id)\
+        .count()
+    
+    if subcategories_count > 0:
         raise HTTPException(
-            status_code=400,
-            detail=f"Bu kateqoriyanın {subcategories} alt kateqoriyası var. Əvvəlcə onları silin"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bu kateqoriyanın {subcategories_count} alt kateqoriyası var. Əvvəlcə onları silin."
         )
     
-    db.delete(category)
+    db.delete(db_category)
     db.commit()
     
-    return {"message": "Kateqoriya silindi", "category_id": category_id}
+    return None
+
 
 # ============================================
-# # BRAND MANAGEMENT
-# # ============================================
+# SUBCATEGORY MANAGEMENT (ADMIN)
+# ============================================
 
-@router.post("/brands/json", response_model=BrandResponse, status_code=status.HTTP_201_CREATED)
-def admin_create_brand_json(
+@router.post(
+    "/subcategories",
+    response_model=SubCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[ADMIN] Yeni alt kateqoriya yarat"
+)
+def admin_create_subcategory(
+    subcategory: SubCategoryCreate,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN - Yeni alt kateqoriya yaradır.
+    parent_id məcburidir və mövcud əsas kateqoriya olmalıdır.
+    """
+    # Verify parent category exists and is a parent (not a subcategory)
+    parent = db.query(Category)\
+        .filter(Category.id == subcategory.parent_id, Category.parent_id == None)\
+        .first()
+    
+    if not parent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID {subcategory.parent_id} ilə əsas kateqoriya tapılmadı"
+        )
+    
+    # Check if slug already exists
+    existing = db.query(Category).filter(Category.slug == subcategory.slug).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Slug '{subcategory.slug}' artıq mövcuddur"
+        )
+    
+    db_subcategory = Category(
+        name_az=subcategory.name_az,
+        name_en=subcategory.name_en,
+        name_ru=subcategory.name_ru,
+        slug=subcategory.slug,
+        parent_id=subcategory.parent_id
+    )
+    
+    db.add(db_subcategory)
+    db.commit()
+    db.refresh(db_subcategory)
+    
+    return db_subcategory
+
+
+@router.get(
+    "/subcategories",
+    response_model=List[SubCategoryResponse],
+    summary="[ADMIN] Bütün alt kateqoriyaları gətir"
+)
+def admin_get_subcategories(
+    parent_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """ADMIN - Bütün alt kateqoriyaları qaytarır"""
+    query = db.query(Category).filter(Category.parent_id != None)
+    
+    if parent_id:
+        query = query.filter(Category.parent_id == parent_id)
+    
+    return query.offset(skip).limit(limit).all()
+
+
+@router.put(
+    "/subcategories/{subcategory_id}",
+    response_model=SubCategoryResponse,
+    summary="[ADMIN] Alt kateqoriyanı yenilə"
+)
+def admin_update_subcategory(
+    subcategory_id: int,
+    subcategory_update: SubCategoryUpdate,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN - Mövcud alt kateqoriyanı yeniləyir.
+    """
+    db_subcategory = db.query(Category)\
+        .filter(Category.id == subcategory_id, Category.parent_id != None)\
+        .first()
+    
+    if not db_subcategory:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID {subcategory_id} ilə alt kateqoriya tapılmadı"
+        )
+    
+    update_data = subcategory_update.model_dump(exclude_unset=True)
+    
+    # Verify new parent_id if being updated
+    if "parent_id" in update_data:
+        parent = db.query(Category)\
+            .filter(Category.id == update_data["parent_id"], Category.parent_id == None)\
+            .first()
+        if not parent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"ID {update_data['parent_id']} ilə əsas kateqoriya tapılmadı"
+            )
+    
+    # Check slug uniqueness if being updated
+    if "slug" in update_data:
+        existing = db.query(Category)\
+            .filter(Category.slug == update_data["slug"], Category.id != subcategory_id)\
+            .first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Slug '{update_data['slug']}' artıq mövcuddur"
+            )
+    
+    for field, value in update_data.items():
+        setattr(db_subcategory, field, value)
+    
+    db.commit()
+    db.refresh(db_subcategory)
+    
+    return db_subcategory
+
+
+@router.delete(
+    "/subcategories/{subcategory_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="[ADMIN] Alt kateqoriyanı sil"
+)
+def admin_delete_subcategory(
+    subcategory_id: int,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN - Alt kateqoriyanı silir.
+    """
+    db_subcategory = db.query(Category)\
+        .filter(Category.id == subcategory_id, Category.parent_id != None)\
+        .first()
+    
+    if not db_subcategory:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ID {subcategory_id} ilə alt kateqoriya tapılmadı"
+        )
+    
+    db.delete(db_subcategory)
+    db.commit()
+    
+    return None
+
+
+# ============================================
+# BRAND MANAGEMENT (ADMIN)
+# ============================================
+
+@router.post("/brands", response_model=BrandResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_brand(
     brand_data: BrandCreate,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Yeni brend əlavə et (JSON body)"""
+    """ADMIN - Yeni brend əlavə et"""
     
     # Check if brand exists
     existing = db.query(Brand).filter(Brand.name == brand_data.name).first()
@@ -450,7 +650,7 @@ def admin_create_brand_json(
     new_brand = Brand(
         name=brand_data.name,
         description=brand_data.description,
-        logo_url=None  # Logo sonra yükləyə bilər
+        logo_url=brand_data.logo_url
     )
     
     db.add(new_brand)
@@ -459,14 +659,26 @@ def admin_create_brand_json(
     
     return new_brand
 
-@router.put("/brands/{brand_id}/json", response_model=BrandResponse)
-def admin_update_brand_json(
+
+@router.get("/brands", response_model=List[BrandResponse])
+def admin_get_brands(
+    skip: int = 0,
+    limit: int = 100,
+    current_admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    """ADMIN - Bütün brendləri gətir"""
+    return db.query(Brand).offset(skip).limit(limit).all()
+
+
+@router.put("/brands/{brand_id}", response_model=BrandResponse)
+def admin_update_brand(
     brand_id: int,
     brand_data: BrandUpdate,
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Brendi redaktə et (JSON body)"""
+    """ADMIN - Brendi redaktə et"""
     
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if not brand:
@@ -487,10 +699,15 @@ def admin_update_brand_json(
     if brand_data.description is not None:
         brand.description = brand_data.description
     
+    # Update logo_url
+    if brand_data.logo_url is not None:
+        brand.logo_url = brand_data.logo_url
+    
     db.commit()
     db.refresh(brand)
     
     return brand
+
 
 @router.delete("/brands/{brand_id}")
 def admin_delete_brand(
@@ -498,7 +715,7 @@ def admin_delete_brand(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Brendi sil"""
+    """ADMIN - Brendi sil"""
     
     brand = db.query(Brand).filter(Brand.id == brand_id).first()
     if not brand:
@@ -521,8 +738,9 @@ def admin_delete_brand(
     
     return {"message": "Brend silindi", "brand_id": brand_id}
 
+
 # ============================================
-# ORDER MANAGEMENT
+# ORDER MANAGEMENT (ADMIN)
 # ============================================
 
 @router.get("/orders")
@@ -533,7 +751,7 @@ def admin_get_all_orders(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Bütün sifarişləri gör"""
+    """ADMIN - Bütün sifarişləri gör"""
     
     query = db.query(Order)
     
@@ -543,6 +761,7 @@ def admin_get_all_orders(
     orders = query.offset(skip).limit(limit).all()
     return orders
 
+
 @router.put("/orders/{order_id}/status")
 def admin_update_order_status(
     order_id: int,
@@ -551,7 +770,7 @@ def admin_update_order_status(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Sifariş statusunu yenilə"""
+    """ADMIN - Sifariş statusunu yenilə"""
     
     valid_statuses = ["pending", "confirmed", "shipped", "delivered", "cancelled"]
     if status not in valid_statuses:
@@ -577,6 +796,7 @@ def admin_update_order_status(
         "tracking_number": tracking_number
     }
 
+
 # ============================================
 # STATISTICS & DASHBOARD
 # ============================================
@@ -586,17 +806,15 @@ def admin_get_statistics(
     current_admin = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin - Dashboard statistikaları"""
+    """ADMIN - Dashboard statistikaları"""
     
     from app.models.user import User
-    from app.models.newsletter import Newsletter
     
     total_products = db.query(Product).count()
     total_categories = db.query(Category).count()
     total_brands = db.query(Brand).count()
     total_orders = db.query(Order).count()
     total_users = db.query(User).count()
-    total_subscribers = db.query(Newsletter).count()
     
     # Orders by status
     orders_pending = db.query(Order).filter(Order.status == "pending").count()
@@ -621,6 +839,5 @@ def admin_get_statistics(
             "shipped": orders_shipped,
             "delivered": orders_delivered
         },
-        "users": total_users,
-        "newsletter_subscribers": total_subscribers
+        "users": total_users
     }
