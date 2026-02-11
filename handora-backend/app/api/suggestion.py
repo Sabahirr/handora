@@ -10,7 +10,7 @@ from app.core.config import SUGGESTION_PRODUCT_IDS
 
 router = APIRouter(prefix="/suggestion", tags=["Suggestion"])
 
-@router.get("/suggestions", response_model=List[ProductResponse])
+@router.get("/", response_model=List[ProductResponse])
 def get_suggestions(db: Session = Depends(get_db)):
     """
     Backend-də saxlanan suggestion product list-ni qaytarır.
