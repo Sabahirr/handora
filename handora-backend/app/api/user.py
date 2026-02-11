@@ -23,7 +23,7 @@ def get_current_user_profile(
     return current_user
 
 
-@router.put("/me/password", status_code=status.HTTP_200_OK)
+@router.put("/update-password", status_code=status.HTTP_200_OK)
 def update_user_password(
     password_data: PasswordUpdate,
     current_user: User = Depends(get_current_user),
