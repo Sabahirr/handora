@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.database import engine, Base
 from app.api import auth, products, categories, brands, orders, wishlist, admin, suggestion, user
-
+from pathlib import Path
 import os
 
 # Create tables
@@ -28,8 +28,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files for uploads
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+app.mount("/uploads", StaticFiles(directory=BASE_DIR / "uploads"), name="uploads")
+
+
 
 # Include routers
 app.include_router(auth.router, prefix=settings.API_PREFIX)
