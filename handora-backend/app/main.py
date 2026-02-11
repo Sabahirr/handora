@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.database import engine, Base
-from app.api import auth, products, categories, brands, orders, wishlist, admin, suggestion
+from app.api import auth, products, categories, brands, orders, wishlist, admin, suggestion, user
 
 import os
 
@@ -40,6 +40,7 @@ app.include_router(orders.router, prefix=settings.API_PREFIX)
 app.include_router(wishlist.router, prefix=settings.API_PREFIX)
 app.include_router(admin.router, prefix=settings.API_PREFIX)
 app.include_router(suggestion.router, prefix=settings.API_PREFIX)
+app.include_router(user.router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 def root():

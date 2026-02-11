@@ -25,3 +25,17 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class PasswordUpdate(BaseModel):
+    """Şifrə yeniləmək üçün schema"""
+    current_password: str
+    new_password: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_password": "oldpassword123",
+                "new_password": "newpassword456"
+            }
+        }
